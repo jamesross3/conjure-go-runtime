@@ -17,6 +17,7 @@ package errors
 import (
 	"fmt"
 	"reflect"
+	"runtime"
 )
 
 var registry = map[string]reflect.Type{}
@@ -27,6 +28,8 @@ var errorInterfaceType = reflect.TypeOf((*Error)(nil)).Elem()
 // The type should be a struct type whose pointer implements Error.
 // Panics if name is already registered or *type does not implement Error.
 func RegisterErrorType(name string, typ reflect.Type) {
+	_, file, _, _ := runtime.Caller(1)
+	fmt.Printf("CALLER IS: %s\n", file)
 	if existing, exists := registry[name]; exists {
 		panic(fmt.Sprintf("ErrorName %v already registered as %v", name, existing))
 	}
@@ -34,4 +37,9 @@ func RegisterErrorType(name string, typ reflect.Type) {
 		panic(fmt.Sprintf("Error type %v does not implement errors.Error interface", ptr))
 	}
 	registry[name] = typ
+}
+
+func RegisterErrorTypeV2() string {
+	_, file, _, _ := runtime.Caller(1)
+	return file
 }

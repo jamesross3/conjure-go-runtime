@@ -49,3 +49,8 @@ func TestRegisterErrorType_types(t *testing.T) {
 			})
 	})
 }
+
+func TestRegisterErrorTypeV2(t *testing.T) {
+	callerFile := RegisterErrorTypeV2()
+	t.Log(callerFile)
+}
