@@ -46,3 +46,32 @@ func UnmarshalError(body []byte) (Error, error) {
 	// Cast should never panic, as we've verified in RegisterErrorType
 	return instance.(Error), nil
 }
+
+// UnmarshalErrorV2 attempts to deserialize the message to a known implementation of Error.
+// Custom error types should be registered using RegisterErrorType.
+// If the ErrorName is not recognized, a genericError is returned with all params marked unsafe.
+// If we fail to unmarshal to a generic SerializableError or to the type specified by ErrorName, an error is returned.
+func UnmarshalErrorV2(errorRegistry map[string]reflect.Type, body []byte) (Error, error) {
+	if errorRegistry == nil {
+		errorRegistry = registry
+	}
+	var name struct {
+		Name string `json:"errorName"`
+	}
+	if err := codecs.JSON.Unmarshal(body, &name); err != nil {
+		return nil, werror.Wrap(err, "failed to unmarshal body as conjure error")
+	}
+	typ, ok := errorRegistry[name.Name]
+	if !ok {
+		// Unrecognized error name, fall back to genericError
+		typ = reflect.TypeOf(genericError{})
+	}
+
+	instance := reflect.New(typ).Interface()
+	if err := codecs.JSON.Unmarshal(body, &instance); err != nil {
+		return nil, werror.Wrap(err, "failed to unmarshal body using registered type", werror.SafeParam("type", typ.String()))
+	}
+
+	// Cast should never panic, as we've verified in RegisterErrorType
+	return instance.(Error), nil
+}

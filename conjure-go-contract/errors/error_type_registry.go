@@ -15,12 +15,17 @@
 package errors
 
 import (
+	"context"
 	"fmt"
 	"reflect"
-	"runtime"
 )
 
 var registry = map[string]reflect.Type{}
+var registryByRegistrar = map[errNameAndRegistrar]reflect.Type{}
+
+type errNameAndRegistrar struct {
+	errName, registrar string
+}
 
 var errorInterfaceType = reflect.TypeOf((*Error)(nil)).Elem()
 
@@ -28,8 +33,6 @@ var errorInterfaceType = reflect.TypeOf((*Error)(nil)).Elem()
 // The type should be a struct type whose pointer implements Error.
 // Panics if name is already registered or *type does not implement Error.
 func RegisterErrorType(name string, typ reflect.Type) {
-	_, file, _, _ := runtime.Caller(1)
-	fmt.Printf("CALLER IS: %s\n", file)
 	if existing, exists := registry[name]; exists {
 		panic(fmt.Sprintf("ErrorName %v already registered as %v", name, existing))
 	}
@@ -39,7 +42,37 @@ func RegisterErrorType(name string, typ reflect.Type) {
 	registry[name] = typ
 }
 
-func RegisterErrorTypeV2() string {
-	_, file, _, _ := runtime.Caller(1)
-	return file
+type ErrorNameAndType struct {
+	Name string
+	Typ  reflect.Type
+}
+
+func NewErrorRegistry(errors ...ErrorNameAndType) map[string]reflect.Type {
+	m := make(map[string]reflect.Type)
+	for _, err := range errors {
+		m[err.Name] = err.Typ
+	}
+	return m
+}
+
+type errorRegistryContextKeyType string
+
+const (
+	errorRegistryContextKey errorRegistryContextKeyType = "conjure-go-runtime:error-registry"
+)
+
+func ErrorRegistryFromContext(ctx context.Context) map[string]reflect.Type {
+	got := ctx.Value(errorRegistryContextKey)
+	if got == nil {
+		return nil
+	}
+	typed, ok := got.(map[string]reflect.Type)
+	if !ok {
+		return nil
+	}
+	return typed
+}
+
+func ContextWithErrorRegistry(ctx context.Context, errorRegistry map[string]reflect.Type) context.Context {
+	return context.WithValue(ctx, errorRegistryContextKey, errorRegistry)
 }

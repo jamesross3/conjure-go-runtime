@@ -17,6 +17,7 @@ package httpclient
 import (
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/palantir/conjure-go-runtime/v2/conjure-go-client/httpclient/internal"
@@ -75,6 +76,26 @@ func (d restErrorDecoder) Handles(resp *http.Response) bool {
 }
 
 func (d restErrorDecoder) DecodeError(resp *http.Response) error {
+	return decodeErrorWithRegistry(resp, nil)
+}
+
+var _ ErrorDecoder = registryBackedErrorDecoder{}
+
+type registryBackedErrorDecoder map[string]reflect.Type
+
+func (r registryBackedErrorDecoder) Handles(resp *http.Response) bool {
+	return resp.StatusCode >= http.StatusTemporaryRedirect
+}
+
+func (r registryBackedErrorDecoder) DecodeError(resp *http.Response) error {
+	return decodeErrorWithRegistry(resp, r)
+}
+
+func NewErrorDecoderWithErrorRegistry(registry map[string]reflect.Type) ErrorDecoder {
+	return registryBackedErrorDecoder(registry)
+}
+
+func decodeErrorWithRegistry(resp *http.Response, errorRegistry map[string]reflect.Type) error {
 	safeParams := map[string]interface{}{
 		"statusCode": resp.StatusCode,
 	}
@@ -102,7 +123,7 @@ func (d restErrorDecoder) DecodeError(resp *http.Response) error {
 	if isJSON := strings.Contains(resp.Header.Get("Content-Type"), codecs.JSON.ContentType()); !isJSON {
 		return werror.Error(resp.Status, wSafeParams, wUnsafeParams, werror.UnsafeParam("responseBody", string(body)))
 	}
-	conjureErr, jsonErr := errors.UnmarshalError(body)
+	conjureErr, jsonErr := errors.UnmarshalErrorV2(errorRegistry, body)
 	if jsonErr != nil {
 		return werror.Error(resp.Status, wSafeParams, wUnsafeParams, werror.UnsafeParam("responseBody", string(body)))
 	}
